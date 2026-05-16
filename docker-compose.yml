@@ -13,6 +13,7 @@ services:
     ports:
       - "7000:7000"
     volumes:
+      - ./index.js:/app/index.js
       - ./logo.svg:/app/logo.svg
       - ./configure.html:/app/configure.html
       - ./configs.json:/app/configs.json
@@ -34,6 +35,7 @@ services:
     ports:
       - "7001:7000"
     volumes:
+      - ./index.js:/app/index.js
       - ./logo.svg:/app/logo.svg
       - ./configure.html:/app/configure.html
       - ./configs.json:/app/configs.json
