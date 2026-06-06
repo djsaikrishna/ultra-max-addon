@@ -1,0 +1,27 @@
+const { CATALOG_DEFS } = require("../catalogs/catalog-defs");
+
+async function handleCatalog(
+  catalogId,
+  type,
+  extra,
+  mdbKey,
+  filterLang,
+  language,
+  rpdbKey,
+  tpKey,
+  traktUser,
+  excludeUnreleased,
+  maxRating,
+  customCatalogs,
+  googleAiKey,
+  fanartKey,
+  omdbKey,
+  deps
+) {
+  // TEMPORARY
+  throw new Error("Not implemented");
+}
+
+module.exports = {
+  handleCatalog
+};
