@@ -1,5 +1,5 @@
 
-# Ultra MAX v6
+# Ultra MAX v7
 
 A free, highly customisable catalog addon for Stremio and Nuvio.
 
