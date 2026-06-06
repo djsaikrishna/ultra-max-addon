@@ -15,10 +15,12 @@ function updateLastAccess(configs, token) {
 
 function handleNuvioManifest(req, res, deps) {
   const {
-    loadConfigs,
-    saveConfigs,
-    buildCatalogsFromIds
-  } = deps;
+  loadConfigs,
+  saveConfigs,
+  buildCatalogsFromIds,
+  QUICK_PICK_CATALOGS,
+  CATALOG_DEFS
+    } = deps;
 
   const { token } = req.params;
   const configs = loadConfigs();
@@ -42,7 +44,9 @@ function handleNuvioManifest(req, res, deps) {
           ])
         )
       : (config.catalogs || []),
-    config.hiddenCatalogs || []
+    config.hiddenCatalogs || [],
+    QUICK_PICK_CATALOGS,
+  CATALOG_DEFS
   ).map(c => ({
     type: c.type,
     id: c.id,
@@ -105,11 +109,13 @@ function handleCinemetaClone(req, res) {
 }
 
 function handleMainManifest(req, res, deps) {
-  const {
-    loadConfigs,
-    saveConfigs,
-    buildCatalogsFromIds
-  } = deps;
+const {
+  loadConfigs,
+  saveConfigs,
+  buildCatalogsFromIds,
+  QUICK_PICK_CATALOGS,
+  CATALOG_DEFS
+} = deps;
 
   const { token } = req.params;
   const configs = loadConfigs();
@@ -148,7 +154,9 @@ function handleMainManifest(req, res, deps) {
             ])
           )
         : (config.catalogs || []),
-      config.hiddenCatalogs || []
+      config.hiddenCatalogs || [],
+      QUICK_PICK_CATALOGS,
+  CATALOG_DEFS
     )
       .map(c => ({
         type: c.type,
