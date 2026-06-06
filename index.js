@@ -32,6 +32,7 @@ const { getStaticIds, buildManifestCatalogs, buildCatalogsFromIds } = require(".
 const { handleMetaRequest } = require("./services/meta-handler-service");
 const { checkStreamWizard } = require("./services/stream-wizard-service");
 const { handleConfiguredMeta } = require("./services/meta-route-service");
+const { handleNuvioManifest, handleCinemetaClone, handleMainManifest } = require("./services/manifest-route-service");
 
 if (!TMDB_KEY) { console.error("TMDB_KEY missing - exiting"); process.exit(1); }
 
@@ -700,135 +701,26 @@ app.get("/c/:token/collections.json", (req, res) => {
   res.json(configs[token].collections || []);
 });
 
-app.get("/n/:token/manifest.json", (req, res) => {
-  const { token } = req.params;
-  const configs = loadConfigs();
-  const config = configs[token];
-  if (!config) return res.status(404).json({ error:"Config not found" });
-  // Track last access for expiry cleanup
-  if (!config.lastAccessed || Date.now() - new Date(config.lastAccessed).getTime() > 24 * 60 * 60 * 1000) {
-    configs[token].lastAccessed = new Date().toISOString();
-    saveConfigs(configs);
-  }
-  const catalogs = buildCatalogsFromIds(
-  config.enableAiRecommended
-    ? Array.from(new Set([...(config.catalogs || []), "ai_recommended_movies", "ai_recommended_series"]))
-    : (config.catalogs || []),
-  config.hiddenCatalogs || []
-)
-    .map(c => ({
-      type: c.type,
-      id: c.id,
-      name: c.name,
-      extra: [{ name:"skip", isRequired:false }]
-    }));
+app.get("/n/:token/manifest.json", (req, res) =>
+  handleNuvioManifest(req, res, {
+    loadConfigs,
+    saveConfigs,
+    buildCatalogsFromIds
+  })
+);
 
-  res.json({
-    id: "com.ultramax.nuvio." + token.toLowerCase(),
-    version: "7.0.0-beta",
-    name: "Ultra MAX",
-    description: "Ultra MAX Nuvio compatible manifest",
-    logo: "https://max-streams.gleeze.com/logo.svg",
-    types: ["movie","series"],
-    idPrefixes: ["tt", "tmdb"],
-    resources: ["catalog","meta","stream"],
-    behaviorHints: {
-      configurable: false,
-      configurationRequired: false,
-      adult: false,
-      p2p: false
-    },
-    catalogs
-  });
-});
+app.get(
+  "/cinemeta-clone/manifest.json",
+  handleCinemetaClone
+);
 
-app.get("/cinemeta-clone/manifest.json", (req, res) => {
-  console.log("CINEMETA CLONE HIT", new Date().toISOString(), req.headers["user-agent"]);
-  res.json({
-    id: "com.ultramax.cinemeta.clone",
-    version: "1.0.0",
-    description: "Cinemeta style test manifest",
-    name: "Ultra MAX Cinemeta Clone",
-    resources: ["catalog","meta","addon_catalog"],
-    types: ["movie","series"],
-    idPrefixes: ["tt"],
-    catalogs: [
-      {
-        type: "movie",
-        id: "top",
-        name: "Popular",
-        genres: ["Action","Comedy","Drama"],
-        extra: [
-          { name: "genre", options: ["Action","Comedy","Drama"] },
-          { name: "search" },
-          { name: "skip" }
-        ],
-        extraSupported: ["search","genre","skip"]
-      }
-    ],
-    behaviorHints: {
-      newEpisodeNotifications: true
-    }
-  });
-});
-
-app.get("/c/:token/manifest.json", (req, res) => {
-  const { token } = req.params;
-  const configs = loadConfigs();
-  const config = configs[token];
-  if (!config) return res.status(404).json({ error:"Config not found" });
-  // Track last access for expiry cleanup
-  if (!config.lastAccessed || Date.now() - new Date(config.lastAccessed).getTime() > 24 * 60 * 60 * 1000) {
-    configs[token].lastAccessed = new Date().toISOString();
-    saveConfigs(configs);
-  }
-  const manifest = {
-    id: "com.ultramax",
-    version:"7.0.0-beta",
-    name:"Ultra MAX",
-    description: `Ultra MAX setup with ${config.catalogs.length} curated rows. Built for cleaner discovery and smoother browsing.`,
-    logo: "https://max-streams.gleeze.com/logo.svg",
-    types: ["movie","series"],
-    idPrefixes: ["tt", "tmdb"],
-    resources: ["catalog","meta","stream"],
-    behaviorHints: {
-      configurable: true,
-      configurationRequired: false,
-      adult: false,
-      p2p: false
-    },
-    catalogs: buildCatalogsFromIds(
-  config.enableAiRecommended
-    ? Array.from(new Set([...(config.catalogs || []), "ai_recommended_movies", "ai_recommended_series"]))
-    : (config.catalogs || []),
-  config.hiddenCatalogs || []
-)
-       .map(c => ({
-          type: c.type,
-          id: c.id,
-          name: c.name,
-          extra: [{ name:"skip", isRequired:false }],
-          extraSupported: ["skip"]
-        }))
-        .concat([
-          {
-            type: "movie",
-            id: "search_movies",
-            name: "Ultra MAX Search",
-            extra: [{ name: "search", isRequired: true }],
-            extraSupported: ["search"]
-          },
-          {
-            type: "series",
-            id: "search_series",
-            name: "Ultra MAX Search",
-            extra: [{ name: "search", isRequired: true }],
-            extraSupported: ["search"]
-          }
-        ]),
-  };
-  res.json(manifest);
-});
+app.get("/c/:token/manifest.json", (req, res) =>
+  handleMainManifest(req, res, {
+    loadConfigs,
+    saveConfigs,
+    buildCatalogsFromIds
+  })
+);
 
 app.get("/c/:token/meta/:type/:id.json", (req, res) =>
   handleConfiguredMeta(req, res, {
