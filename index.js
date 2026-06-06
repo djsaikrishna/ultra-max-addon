@@ -31,6 +31,7 @@ const { handleCatalogSearch } = require("./services/catalog-search-service");
 const { getStaticIds, buildManifestCatalogs, buildCatalogsFromIds } = require("./services/manifest-service");
 const { handleMetaRequest } = require("./services/meta-handler-service");
 const { checkStreamWizard } = require("./services/stream-wizard-service");
+const { handleConfiguredMeta } = require("./services/meta-route-service");
 
 if (!TMDB_KEY) { console.error("TMDB_KEY missing - exiting"); process.exit(1); }
 
@@ -829,73 +830,13 @@ app.get("/c/:token/manifest.json", (req, res) => {
   res.json(manifest);
 });
 
-app.get("/c/:token/meta/:type/:id.json", async (req, res) => {
-  const { token, type, id } = req.params;
-  const configs = loadConfigs();
-  const lang = configs[token]?.language || "en-US";
-  try {
-    const tmdbType = type === "series" ? "tv" : "movie";
-    const findRes = await fetchCached(`https://api.themoviedb.org/3/find/${id}?api_key=${TMDB_KEY}&external_source=imdb_id`);
-    const result = findRes[`${tmdbType}_results`]?.[0];
-    console.log("META DEBUG:", tmdbType, id, "result:", result?.id, "lang:", lang);
-    if (!result) return res.json({ meta: { id, type } });
-    const tmdbId = result.id;
-    const d = await fetchCached(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_KEY}&append_to_response=credits&language=${lang}`);
-    const castPeople = (d.credits?.cast || []).slice(0, 12).map(person => ({
-      name: person.name,
-      character: person.character || "",
-      image: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : null,
-      profile: person.profile_path ? `https://image.tmdb.org/t/p/w185${person.profile_path}` : null
-    }));
-    const cast = castPeople.map(person => person.name);
-    const meta = {
-      id,
-      imdb_id: id,
-      moviedb_id: tmdbId,
-      type,
-      name: d.title || d.name,
-      description: d.overview,
-      poster: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : null,
-      background: d.backdrop_path ? `https://image.tmdb.org/t/p/original${d.backdrop_path}` : null,
-      releaseInfo: d.release_date ? d.release_date.split("-")[0] : d.first_air_date ? d.first_air_date.split("-")[0] : null,
-      imdbRating: d.vote_average ? d.vote_average.toFixed(1) : null,
-      genres: (d.genres || []).map(g => g.name),
-      cast,
-      credits: castPeople,
-      castImages: castPeople,
-      people: castPeople
-    };
-    if (type ==="series") {
-      const seasons = (d.seasons || []).filter(s => s.season_number > 0);
-      const seasonData = await Promise.all(
-        seasons.map(async season => {
-          try {
-            return await fetchCached(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${season.season_number}?api_key=${TMDB_KEY}`);
-          } catch { return null; }
-        })
-      );
-      const videos = [];
-      seasonData.forEach((sr, i) => {
-        if (!sr) return;
-        const season = seasons[i];
-        (sr.episodes || []).forEach(ep => {
-          videos.push({
-            id: `${id}:${season.season_number}:${ep.episode_number}`,
-            title: ep.name || `Episode ${ep.episode_number}`,
-            season: season.season_number, episode: ep.episode_number,
-            overview: ep.overview || "",
-            thumbnail: ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : null,
-            released: ep.air_date ? new Date(ep.air_date).toISOString() : null
-          });
-        });
-      });
-      videos.sort((a, b) => a.season !== b.season ? a.season - b.season : a.episode - b.episode);
-      meta.videos = videos;
-    }
-    res.json({ meta });
-  } catch (e) { res.json({ meta: { id, type } }); }
-});
-
+app.get("/c/:token/meta/:type/:id.json", (req, res) =>
+  handleConfiguredMeta(req, res, {
+    loadConfigs,
+    fetchCached,
+    TMDB_KEY
+  })
+);
 
 app.get("/meta/:type/:id.json", async (req, res) => {
   const { type, id } = req.params;
