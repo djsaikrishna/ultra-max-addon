@@ -28,27 +28,13 @@ const { handleSearch } = require("./services/search-service");
 const { buildTmdbCatalogUrl } = require("./services/tmdb-catalog-service");
 const { handleRelatedContent } = require("./services/related-content-service");
 const { handleCatalogSearch } = require("./services/catalog-search-service");
+const { getStaticIds, buildManifestCatalogs, buildCatalogsFromIds } = require("./services/manifest-service");
 
 if (!TMDB_KEY) { console.error("TMDB_KEY missing - exiting"); process.exit(1); }
 
-function getStaticIds() {
-  // MDB catalogs not in static manifest - only via custom configs
-  return Object.keys(CATALOG_DEFS).filter(id => {
-    if (!FILTER_ENABLED) return true;
-    return !["crunchyroll","hidive","anime","bollywood"].some(x => id.includes(x));
-  });
-}
-
-function buildManifestCatalogs(ids) {
-  return ids.map(id => {
-    const def = CATALOG_DEFS[id];
-    if (!def) return null;
-    return { type: def.type, id, name: def.name, extra: [{ name:"skip", isRequired: false }] };
-  }).filter(Boolean);
-}
-
-const staticIds = getStaticIds();
+const staticIds = getStaticIds( CATALOG_DEFS, FILTER_ENABLED );
 const builder = new addonBuilder({
+
   id: FILTER_ENABLED ?"org.kris.ultra.max.v5" :"org.kris.ultra.max.all.v5",
   version:"7.0.0-beta",
   logo: "https://max-streams.gleeze.com/logo.svg",
@@ -276,33 +262,6 @@ default:
       allResults = await filterByMaxRating(allResults, maxRating);
   }
   return { metas: await resultsToMetas(allResults, type, filterLang, language, rpdbKey, tpKey, excludeUnreleased, fanartKey, omdbKey) };
-}
-
-function buildCatalogsFromIds(selectedIds, hiddenIds = []) {
-  const hiddenSet = new Set(hiddenIds || []);
-  const quickMap = new Map(QUICK_PICK_CATALOGS.map(c => [c.id, c]));
-
-  return selectedIds.map(id => {
-    const quick = quickMap.get(id);
-    if (quick) {
-      return {
-        type: quick.type,
-        id: quick.id,
-        name: quick.name,
-        extra: [{ name:"skip", isRequired: false }]
-      };
-    }
-
-    const def = CATALOG_DEFS[id];
-    if (!def) return null;
-    return {
-      type: def.type,
-      id,
-      name: def.name,
-      showInHome: !hiddenSet.has(id),
-      extra: [{ name:"skip", isRequired: false }]
-    };
-  }).filter(Boolean);
 }
 
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
