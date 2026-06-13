@@ -12,7 +12,6 @@ async function handleCatalog(
   traktUser,
   excludeUnreleased,
   maxRating,
-  includeAdult,
   customCatalogs,
   googleAiKey,
   fanartKey,
@@ -117,7 +116,7 @@ if (extra && extra.search) {
 
   const RATING_ORDER = ["G","PG","PG-13","R","NC-17"];
   const allowedRatings = maxRating ? RATING_ORDER.slice(0, RATING_ORDER.indexOf(maxRating) + 1) : [];
-  const ratingParam = maxRating ? `&certification_country=US&certification.lte=${encodeURIComponent(maxRating)}` : "";
+  const ratingParam = allowedRatings.length ? `&certification_country=US&certification=${allowedRatings.map(encodeURIComponent).join("%7C")}` : "";
   const sortBy = extra?.sort === "chronological"
   ? "primary_release_date.asc"
   : (extra?.sort === "release_date_desc"
@@ -146,54 +145,6 @@ if (relatedResult) {
   return relatedResult;
 }
 
-if (catalogId === "rightnow_movies" || catalogId === "rightnow_series") {
-
-  const hour = new Date().getHours();
-
-let targetCatalog;
-
-if (hour >= 6 && hour < 12) {
-  targetCatalog =
-    type === "movie"
-      ? "popular_movies"
-      : "popular_series";
-} else if (hour >= 12 && hour < 18) {
-  targetCatalog =
-    type === "movie"
-      ? "trending_movies"
-      : "trending_series";
-} else if (hour >= 18 && hour < 23) {
-  targetCatalog =
-    type === "movie"
-      ? "top_movies"
-      : "top_series";
-} else {
-  targetCatalog =
-    type === "movie"
-      ? "trending_movies"
-      : "trending_series";
-}
-
-  return await handleCatalog(
-    targetCatalog,
-    type,
-    extra,
-    mdbKey,
-    filterLang,
-    language,
-    rpdbKey,
-    tpKey,
-    traktUser,
-    excludeUnreleased,
-    maxRating,
-    customCatalogs,
-    googleAiKey,
-    fanartKey,
-    omdbKey,
-    deps
-  );
-}
-
   const def = CATALOG_DEFS[catalogId];
   if (!def) return { metas: [] };
   if (def.handler ==="mdb") {
@@ -207,8 +158,7 @@ if (hour >= 6 && hour < 12) {
   page,
   sortBy,
   ratingParam,
-  TMDB_KEY,
-  includeAdult
+  TMDB_KEY
 });
 switch(def.handler) {
     case"tmdb_collection": {
@@ -246,13 +196,13 @@ switch(def.handler) {
            TRAKT_CLIENT_ID
   );
     case"tmdb_anime":
-      url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${TMDB_KEY}&include_adult=${includeAdult?"true":"false"}&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${page}${ratingParam}`;
+      url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${TMDB_KEY}&with_genres=16&with_original_language=ja&sort_by=popularity.desc&page=${page}${type==="movie"?ratingParam:""}`;
       break;
     case"tmdb_bollywood":
-      url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${TMDB_KEY}&include_adult=${includeAdult?"true":"false"}&with_original_language=hi&sort_by=popularity.desc&page=${page}${ratingParam}`;
+      url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${TMDB_KEY}&with_original_language=hi&sort_by=popularity.desc&page=${page}${type==="movie"?ratingParam:""}`;
       break;
     case"tmdb_paramount":
-      url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${TMDB_KEY}&with_watch_providers=2616%7C2303&watch_region=US&sort_by=popularity.desc&page=${page}${ratingParam}`;
+      url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${TMDB_KEY}&with_watch_providers=2616%7C2303&watch_region=US&sort_by=popularity.desc&page=${page}${type==="movie"?ratingParam:""}`;
       break;
     case "tmdb_ids": {
       const ids = Array.isArray(def.ids) ? def.ids : [];
@@ -289,12 +239,9 @@ switch(def.handler) {
   });
 
 default:
-    if (!url) return { metas: [] };
-    break;
-}
+      return { metas: [] };                                                                                                                                 }
   if (language && language !== "en-US") url += `&language=${language}`;
-  const batchSize = 100; // 5 pages x 20 results per TMDB page
-  const startPage = Math.floor((extra?.skip || 0) / batchSize) * 5 + 1;
+  const startPage = Math.floor((extra?.skip || 0) / 100) * 5 + 1;
   const pages = await Promise.all(
     Array.from({length: 5}, (_, i) =>
       fetchCached(url.replace(`page=${page}`, `page=${startPage + i}`))

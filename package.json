@@ -1,6 +1,6 @@
 {
   "name": "stremio-catalog-addon",
-  "version": "7.0.0-beta",
+  "version": "7.0.0",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

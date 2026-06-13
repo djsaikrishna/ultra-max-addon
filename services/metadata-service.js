@@ -12,11 +12,17 @@ async function getImdbId(tmdbId, type) {
   const key = `${type}-${tmdbId}`;
   if (imdbCache.has(key)) return imdbCache.get(key);
   try {
-    const t = type ==="series" ?"tv" :"movie";
-    const r = await axios.get(`https://api.themoviedb.org/3/${t}/${tmdbId}/external_ids?api_key=${TMDB_KEY}`, { timeout: 5000 });
-    imdbCache.set(key, r.data.imdb_id || null);
-    return r.data.imdb_id || null;
-  } catch { imdbCache.set(key, null); return null; }
+    const t = type === "series" ? "tv" : "movie";
+    const r = await Promise.race([
+      axios.get(`https://api.themoviedb.org/3/${t}/${tmdbId}/external_ids?api_key=${TMDB_KEY}`),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+    ]);
+    const imdbId = r.data.imdb_id || null;
+    if (imdbId) imdbCache.set(key, imdbId);
+    return imdbId;
+  } catch(e) {
+    return null;
+  }
 }
 
 function ratingAllowed(cert, maxRating) {

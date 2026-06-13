@@ -56,10 +56,10 @@ function handleNuvioManifest(req, res, deps) {
 
   return res.json({
     id: "com.ultramax.nuvio." + token.toLowerCase(),
-    version: "7.0.0-beta",
+    version: "7.0.0",
     name: "Ultra MAX",
     description: "Ultra MAX Nuvio compatible manifest",
-    logo: "https://max-streams.gleeze.com/logo.svg",
+    logo: "https://ultramax.vip/logo.svg",
     types: ["movie", "series"],
     idPrefixes: ["tt", "tmdb"],
     resources: ["catalog", "meta", "stream"],
@@ -131,10 +131,10 @@ const {
 
   const manifest = {
     id: "com.ultramax",
-    version: "7.0.0-beta",
+    version: "7.0.0",
     name: "Ultra MAX",
     description: `Ultra MAX setup with ${config.catalogs.length} curated rows. Built for cleaner discovery and smoother browsing.`,
-    logo: "https://max-streams.gleeze.com/logo.svg",
+    logo: "https://ultramax.vip/logo.svg",
     types: ["movie", "series"],
     idPrefixes: ["tt", "tmdb"],
     resources: ["catalog", "meta", "stream"],
@@ -163,7 +163,8 @@ const {
         id: c.id,
         name: c.name,
         extra: [{ name: "skip", isRequired: false }],
-        extraSupported: ["skip"]
+        extraSupported: ["skip"],
+        pageSize: 100
       }))
       .concat([
         {

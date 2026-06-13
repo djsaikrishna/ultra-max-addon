@@ -36,6 +36,8 @@ const { handleNuvioManifest, handleCinemetaClone, handleMainManifest } = require
 const { handleTmdbPreview } = require("./services/tmdb-preview-service");
 const { registerConfigRoutes } = require("./services/config-route-service");
 const { handleCatalog: handleCatalogService } = require("./services/catalog-handler-service");
+const { registerCatalogRoutes } = require("./services/catalog-route-service");
+const { registerStatsRoutes } = require("./services/stats-route-service");
 
 if (!TMDB_KEY) { console.error("TMDB_KEY missing - exiting"); process.exit(1); }
 
@@ -43,8 +45,8 @@ const staticIds = getStaticIds( CATALOG_DEFS, FILTER_ENABLED );
 const builder = new addonBuilder({
 
   id: FILTER_ENABLED ?"org.kris.ultra.max.v5" :"org.kris.ultra.max.all.v5",
-  version:"7.0.0-beta",
-  logo: "https://max-streams.gleeze.com/logo.svg",
+  version:"7.0.0",
+  logo: "https://ultramax.vip/logo.svg",
   name: FILTER_ENABLED ?"Ultra MAX" :"Ultra MAX All",
   description:"Premium curated catalogs for Stremio and Nuvio. Fast discovery, cleaner collections, and smarter rows.",
   types: ["movie","series"],
@@ -70,6 +72,20 @@ const catalogDeps = {
   resultsToMetas,
   mdblistToMetas
 };
+
+const catalogRouteDeps = {
+  FILTER_ENABLED,
+  QUICK_PICK_CATALOGS,
+  DYNAMIC_CATALOGS,
+  staticIds,
+  CATALOG_DEFS,
+  buildManifestCatalogs,
+  handleCatalogService,
+  catalogDeps,
+  loadConfigs,
+  MDBLIST_KEY
+};
+
 
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
   console.log("SDK HANDLER:", id, extra);
@@ -113,13 +129,17 @@ const addonInterface = builder.getInterface();
 const app = express();
 app.use((req, res, next) => { res.setHeader("Access-Control-Allow-Origin", "*"); res.setHeader("Access-Control-Allow-Headers", "*"); res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS"); if (req.method === "OPTIONS") return res.sendStatus(200); next(); });
 app.use(express.json());
-
+registerCatalogRoutes(app, catalogRouteDeps);
 registerConfigRoutes(app, {
   loadConfigs,
   saveConfigs,
   hashPassword,
   generateToken,
   rateLimit
+});
+
+registerStatsRoutes(app, {
+  loadConfigs
 });
 
 // ================================
@@ -134,59 +154,180 @@ app.post(
 
 app.get("/health", (req, res) => { res.status(200).json({ ok: true, service: "ultra-max", timestamp: new Date().toISOString() }); });
 
+app.get("/trending", (req, res) => {
+  const fs = require("fs");
+  try {
+    const configs = JSON.parse(fs.readFileSync("/home/ubuntu/ultramax-landing/addon/configs.json", "utf8"));
+    const counts = {};
+    for(const token of Object.values(configs)){
+      const catalogs = token.catalogs || [];
+      for(const id of catalogs){
+        counts[id] = (counts[id] || 0) + 1;
+      }
+    }
+    const sorted = Object.entries(counts)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0, 10)
+      .map(([id, count]) => ({ id, count }));
+    res.json({ trending: sorted, total: Object.keys(configs).length });
+  } catch(e) {
+    res.json({ trending: [], total: 0 });
+  }
+});
+
+app.get("/stats", (req, res) => {
+  const fs = require("fs");
+  try {
+    const configs = JSON.parse(fs.readFileSync("/home/ubuntu/ultramax-landing/addon/configs.json", "utf8"));
+    res.json({ users: Object.keys(configs).length });
+  } catch(e) {
+    res.json({ users: 0 });
+  }
+});
+
 app.get("/assets", (req, res) => {
   const fs = require("fs");
-  const dir = process.env.IMAGES_DIR || "/home/ubuntu/images";
-  let files = [];
-  try {
-    files = fs.readdirSync(dir)
-      .filter(f => /\.(png|jpe?g|webp|gif|svg)$/i.test(f))
-      .sort();
-  } catch (e) {
-    return res.status(500).send("Could not read image folder: " + e.message);
+
+  const folders = [
+    { label: "Main", dir: process.env.IMAGES_DIR || "/home/ubuntu/images", prefix: "/images/" },
+    { label: "Quick", dir: "/home/ubuntu/ultramax-landing/images/quick", prefix: "/images/quick/" }
+  ];
+
+  let allFiles = [];
+  for(const folder of folders){
+    try {
+      const files = fs.readdirSync(folder.dir)
+        .filter(f => /\.(png|jpe?g|webp|gif|svg)$/i.test(f))
+        .sort()
+        .map(f => ({ name: f, label: folder.label, url: folder.prefix + encodeURIComponent(f) }));
+      allFiles = allFiles.concat(files);
+    } catch(e) {}
   }
 
-  const cards = files.map(f => {
-    const safeName = String(f).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const url = "/images/" + encodeURIComponent(f);
-    return '<div class="card">' +
-      '<img src="' + url + '">' +
-      '<div class="name">' + safeName + '</div>' +
-      '<button type="button" data-url="' + url + '">Copy URL</button>' +
-      '</div>';
+  const mode = req.query.mode || 'cover';
+  const ci = req.query.ci || '';
+  const fi = req.query.fi || '';
+  const returnTo = req.query.returnTo || '';
+
+  const cards = allFiles.map(f => {
+    const safeName = String(f.name).replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `<div class="card" data-name="${safeName.toLowerCase()}" data-folder="${f.label.toLowerCase()}">
+      <img src="${f.url}" loading="lazy">
+      <div class="name">${safeName}</div>
+      <div class="folder-tag">${f.label}</div>
+      <button type="button" data-url="${f.url}">Use Image</button>
+    </div>`;
   }).join("");
 
-  res.send(`<!doctype html>
+  const html = `<!doctype html>
 <html>
 <head>
 <title>Ultra MAX Asset Library</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{margin:0;background:#05070d;color:white;font-family:Arial;padding:18px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
-.card{border:1px solid #333;border-radius:12px;padding:10px;background:#111}
-.card img{width:100%;height:120px;object-fit:cover;border-radius:8px}
-.name{font-size:12px;margin:8px 0;color:#ccc;word-break:break-all}
-button{width:100%;padding:8px;border-radius:8px;background:#18ffff22;color:#18ffff;border:1px solid #18ffff66}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#080810;color:#e0e0f0;font-family:sans-serif;min-height:100vh;}
+  header{background:#0f0f1e;border-bottom:1px solid #1e1e36;padding:14px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .logo{font-size:1rem;font-weight:700;color:#fff;white-space:nowrap;}
+  .logo span{color:#7B2FFF;}
+  .search{flex:1;min-width:180px;background:#12121f;border:1px solid #2a2a45;color:#e0e0f0;font-size:14px;padding:9px 12px;border-radius:8px;outline:none;}
+  .search:focus{border-color:#7B2FFF;}
+  .search::placeholder{color:#7070a0;}
+  .tabs{display:flex;gap:6px;}
+  .tab{background:transparent;border:1px solid #2a2a45;color:#7070a0;font-size:11px;font-weight:600;padding:6px 10px;border-radius:6px;cursor:pointer;}
+  .tab.active{border-color:#7B2FFF;color:#9B5FFF;}
+  .count{font-size:12px;color:#7070a0;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;padding:16px;}
+  .card{border:1px solid #1e1e36;border-radius:10px;overflow:hidden;background:#12121f;}
+  .card:hover{border-color:#7B2FFF;}
+  .card img{width:100%;height:100px;object-fit:cover;display:block;background:#0f0f1e;}
+  .name{font-size:10px;color:#7070a0;padding:5px 8px 1px;word-break:break-all;line-height:1.3;}
+  .folder-tag{font-size:9px;color:#7B2FFF;padding:0 8px 4px;font-weight:600;}
+  .card button{width:100%;padding:7px;background:rgba(123,47,255,.15);color:#9B5FFF;border:0;border-top:1px solid #1e1e36;cursor:pointer;font-size:12px;font-weight:600;}
+  .card button:hover{background:rgba(123,47,255,.3);}
+  .card.hidden{display:none;}
+  .empty{text-align:center;padding:60px;color:#7070a0;}
 </style>
 </head>
 <body>
-<h1>Ultra MAX Asset Library</h1>
-<p>Tap Copy URL, then paste it into your Cover or GIF field.</p>
-<div class="grid">${cards}</div>
+<header>
+  <div class="logo">ULTRA <span>MAX</span> Assets</div>
+  <input class="search" type="text" id="searchBox" placeholder="Search images..." oninput="filterImages()">
+  <div class="tabs">
+    <button class="tab active" onclick="setFilter('all',this)">All</button>
+    <button class="tab" onclick="setFilter('main',this)">Main</button>
+    <button class="tab" onclick="setFilter('quick',this)">Quick</button>
+    <button class="tab" onclick="setFilter('.gif',this)">GIFs</button>
+  </div>
+  <div class="count" id="countLabel">${allFiles.length} images</div>
+</header>
+<div class="grid" id="grid">${cards}</div>
+<div class="empty" id="emptyMsg" style="display:none;">No images found</div>
 <script>
-document.querySelectorAll("button[data-url]").forEach(function(btn){
-  btn.addEventListener("click", function(){
-    var full = window.location.origin + btn.getAttribute("data-url");
-    navigator.clipboard.writeText(full).then(function(){
-      alert("Copied: " + full);
-    });
+var currentFilter='all';
+var returnTo='${returnTo}';
+var mode='${mode}';
+var ci=${ci||'null'};
+var fi=${fi||'null'};
+
+function setFilter(f,el){
+  currentFilter=f;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  filterImages();
+}
+
+function filterImages(){
+  var q=document.getElementById('searchBox').value.toLowerCase();
+  var cards=document.querySelectorAll('.card');
+  var visible=0;
+  cards.forEach(function(card){
+    var name=card.getAttribute('data-name')||'';
+    var folder=card.getAttribute('data-folder')||'';
+    var matchSearch=!q||name.includes(q);
+    var matchFilter=currentFilter==='all'||folder.includes(currentFilter)||name.includes(currentFilter);
+    if(matchSearch&&matchFilter){card.classList.remove('hidden');visible++;}
+    else{card.classList.add('hidden');}
+  });
+  document.getElementById('countLabel').textContent=visible+' images';
+  document.getElementById('emptyMsg').style.display=visible===0?'block':'none';
+}
+
+document.querySelectorAll('button[data-url]').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var full=window.location.origin+btn.getAttribute('data-url');
+    if(window.parent !== window && ci!==null && fi!==null){
+      window.parent.postMessage({type:'assetPick',ci:ci,fi:fi,url:full,mode:mode},'*');
+    } else if(returnTo&&returnTo!=='null'&&returnTo!==''&&ci!==null&&fi!==null){
+      localStorage.setItem('ultramaxAssetPick',JSON.stringify({ci:ci,fi:fi,url:full,mode:mode}));
+      window.location.href=returnTo;
+    } else {
+      var ta=document.createElement('textarea');
+      ta.value=full;
+      ta.style.position='fixed';
+      ta.style.opacity='0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try{ document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(ta);
+      btn.textContent='✅ Copied!';
+      btn.style.background='rgba(0,210,160,.25)';
+      btn.style.color='#00d2a0';
+      setTimeout(function(){
+        btn.textContent='Use Image';
+        btn.style.background='';
+        btn.style.color='';
+      },2500);
+    }
   });
 });
 </script>
 </body>
-</html>`);
+</html>`;
+  res.send(html);
 });
+;
 
 app.get("/configure", (req, res) => { res.setHeader("Cache-Control","public, max-age=300"); res.sendFile(path.join(__dirname,"configure.html")); });
 app.get("/configure/:token", (req, res) => { res.setHeader("Cache-Control","public, max-age=300"); res.sendFile(path.join(__dirname,"configure.html")); });
@@ -194,6 +335,7 @@ app.get("/c/:token/configure", (req, res) => { res.redirect(`/configure/${req.pa
 app.get("/logo.svg", (req, res) => { res.sendFile(path.join(__dirname,"logo.svg")); });
 app.get("/collections-builder", (req, res) => { res.sendFile(path.join(__dirname,"collections-builder.html")); });
 app.use("/images", express.static(path.join(__dirname,"images"), { maxAge: '7d', etag: true }));
+app.use("/images/quick", express.static("/home/ubuntu/ultramax-landing/images/quick", { maxAge: '7d', etag: true }));
 app.get("/collections.json", (req, res) => { res.sendFile(path.join(__dirname,"collections.json")); });
 
 app.post("/api/ai/custom-row", async (req, res) => {
@@ -418,114 +560,6 @@ app.get("/c/:token/stream/:type/:id.json", async (req, res) => {
 });
 
 app.get("/preview/tmdb", handleTmdbPreview);
-
-app.use((req, res, next) => {
-  const url = req.url;
-  if (url.includes("/manifest.json") && !url.startsWith("/c/")) {
-    const fullManifest = {
-      id: FILTER_ENABLED ?"org.kris.ultra.max.v5" :"org.kris.ultra.max.all.v5",
-      version:"7.0.0-beta",
-  logo: "https://max-streams.gleeze.com/logo.svg",
-      name: FILTER_ENABLED ?"Ultra MAX" :"Ultra MAX All",
-      description: FILTER_ENABLED ?"Curated discovery with filtered rows and cleaner collections." :"Full Ultra MAX discovery with all available rows.",
-      types: ["movie","series"],
-      resources: ["catalog","meta","stream"],
-      catalogs: [
-        ...QUICK_PICK_CATALOGS,
-        ...buildManifestCatalogs(
-  staticIds,
-  CATALOG_DEFS
-),
-        ...DYNAMIC_CATALOGS.map(c => ({ type: c.type, id: c.id, name: c.name, extra: [{ name:"tmdbId", isRequired: true }] })),
-        { type:"movie", id:"search_movies", name:"Ultra MAX Search", extra:[{ name:"search", isRequired:true }], extraSupported:["search"] },
-        { type:"series", id:"search_series", name:"Ultra MAX Search", extra:[{ name:"search", isRequired:true }], extraSupported:["search"] }
-      ]
-    };
-    fullManifest.catalogs = (fullManifest.catalogs || [])
-  .filter(c => c && c.id) // keep valid ones only
-  .map(c => ({
-    ...c,
-    name: (c.name || "").trim()
-  }));
-
-    return res.json(fullManifest);
-  }
-  if (url.match(/\/catalog\//) && !url.startsWith("/c/")) {
-    const match = url.match(/\/catalog\/([^/]+)\/([^/]+)(?:\/(.+))?\.json/);
-    if (match) {
-      const [, type, id, extraStr] = match;
-      let extra = {};
-      if (extraStr) { try { extra = JSON.parse(decodeURIComponent(extraStr)); } catch { decodeURIComponent(extraStr).split("&").forEach(p => { const [k,v] = p.split("="); if(k && v) extra[k]=decodeURIComponent(v); }); } }
-        handleCatalogService(
-  id,
-  type,
-  extra,
-  null,
-  FILTER_ENABLED,
-  "en-US",
-  null,
-  null,
-  null,
-  false,
-  null,
-  [],
-  null,
-  null,
-  null,
-  catalogDeps
-)
-        .then(result => { res.setHeader("Cache-Control","public, max-age=300"); res.json(result); })
-        .catch(() => res.json({ metas: [] }));
-      return;
-    }
-  }
-if (url.includes("/catalog/") && url.includes("/c/")) {
-    const match = url.match(/\/c\/([^/]+)\/catalog\/([^/]+)\/([^/]+)(?:\/(.+))?\.json/);
-    if (match) {
-      let [, token, type, id, extraStr] = match;
-console.log(
-  "CUSTOM CATALOG:",
-  token,
-  id,
-  "extraStr:",
-  extraStr,
-  "query:",
-  req.query
-);
-      if (id === "search_movie") id = "search_movies";
-      const configs = loadConfigs();
-      const config = configs[token];
-      if (!config) return res.json({ metas: [] });
-      let extra = {};
-      if (extraStr) { try { extra = JSON.parse(decodeURIComponent(extraStr)); } catch { decodeURIComponent(extraStr).split('&').forEach(p => { const [k,v] = p.split('='); if(k && v) extra[k]=decodeURIComponent(v); }); } }
-      if (req.query.skip) extra.skip = parseInt(req.query.skip);
-      if (req.query.search) extra.search = req.query.search;
-      const hasAnime = config.catalogs.some(c => c.includes("anime") || c.includes("bollywood") || c.includes("crunchyroll") || c.includes("hidive"));
-       handleCatalogService(
-        id,
-        type,
-        extra,
-        config.mdblistKey || MDBLIST_KEY,
-        !hasAnime,
-        config.language || "en-US",
-        config.rpdbKey || null,
-        config.tpKey || null,
-        config.traktUser || null,
-        config.excludeUnreleased || false,
-        config.maxRating || null,
-        config.customCatalogs || [],
-        config.googleAiKey || null,
-        config.fanartKey || null,
-        config.omdbKey || null,
-        catalogDeps
-      )
-        .then(result => { res.setHeader("Cache-Control","public, max-age=300"); res.json(result); })
-        .catch(() => res.json({ metas: [] }));
-      return;
-    }
-  }
-  next();
-});
 
 // On startup: remove configs not accessed in 180 days
 (function cleanupStaleConfigs() {

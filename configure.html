@@ -104,16 +104,23 @@
   .category{margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #1a1a1a;}
   .category:last-child{border-bottom:none;}
   .category.hidden{display:none;}
-  .cat-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0;cursor:pointer;padding:6px 0;user-select:none;min-height:28px;}
+  .cat-header{display:flex;align-items:center;margin-bottom:0;cursor:pointer;padding:6px 0;user-select:none;min-height:28px;}
   .cat-header:hover .cat-title{color:#fff;}
   .cat-chevron{font-size:10px;color:#555;transition:transform 0.2s;margin-left:8px;flex-shrink:0;}
   .cat-chevron.open{transform:rotate(180deg);}
   .pills-wrap{display:none;padding-top:6px;}
   .pills-wrap.open{display:block;margin-top:4px;}
-  .cat-title{font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#bbb;display:flex;align-items:center;gap:8px;}
+  .cat-title{ font-size:10px; letter-spacing:0.2em; text-transform:uppercase; color:#bbb; display:flex; align-items:center; gap:8px; flex:1;}
   .cat-icon{font-size:13px;}
   .cat-count{font-size:10px;color:#888;margin-left:4px;}
-  .select-all{font-size:10px;color:#999;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;flex-shrink:0;}
+  .select-all{
+  font-size:10px;
+  color:#999;
+  cursor:pointer;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  flex-shrink:0;
+}
   .select-all:hover{color:#fff;}
   .pills{display:flex;flex-wrap:wrap;gap:8px;}
   .pill{background:transparent;border:1px solid #333;color:#bbb;font-family:'Courier Prime',monospace;font-size:12px;padding:5px 12px;border-radius:3px;cursor:pointer;transition:all 0.15s;user-select:none;letter-spacing:0.03em;}
@@ -3442,7 +3449,7 @@ function moveFolderDown(ci, fi){
 
 
 
-const IMAGE_BASE = 'https://max-streams.gleeze.com/images/';
+const IMAGE_BASE = 'https://ultramax.vip/images/';
 
 
 const FOLDER_IMAGE_OVERRIDES = {
@@ -5937,7 +5944,7 @@ async function generate(){
     document.getElementById('installBtn').href = 'stremio://' + manifestUrl.replace('https://','').replace('http://','');
 
     document.getElementById('tokenDisplay').textContent = data.token;
-    document.getElementById('editLink').innerHTML = '<a href="/configure/' + data.token + '" style="color:#888;">max-streams.gleeze.com/configure/' + data.token + '</a>';
+    document.getElementById('editLink').innerHTML = '<a href="/configure/' + data.token + '" style="color:#888;">ultramax.vip/configure/' + data.token + '</a>';
     saveDraftState();
     document.getElementById('resultBox').style.display = 'block';
     document.getElementById('loading').classList.remove('visible');
@@ -6082,13 +6089,15 @@ function initCollapsible(){
     });
   });
 
-  // Open themed and regional wraps by default
-  ["themed","regional"].forEach(function(g){
-    const wrap = document.getElementById("wrap-"+g);
-    const chev = document.getElementById("chev-"+g);
-    if(wrap) wrap.classList.add("open");
-    if(chev) chev.classList.add("open");
-  });
+/*
+// Open themed and regional wraps by default
+["themed","regional"].forEach(function(g){
+  const wrap = document.getElementById("wrap-"+g);
+  const chev = document.getElementById("chev-"+g);
+  if(wrap) wrap.classList.add("open");
+  if(chev) chev.classList.add("open");
+});
+*/
 }
 
 // Init

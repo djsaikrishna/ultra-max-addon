@@ -17,7 +17,7 @@ const PREWARM_CATALOGS = [
   'trakt_popular_movies', 'trakt_popular_series'
 ];
 
-const BASE_URL = 'https://max-streams.gleeze.com';
+const BASE_URL = 'https://ultramax.vip';
 const INTERVAL_MS = 4 * 60 * 1000;
 
 async function prewarm() {

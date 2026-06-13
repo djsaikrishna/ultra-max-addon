@@ -1,0 +1,129 @@
+function registerCatalogRoutes(app, deps) {
+console.log("CATALOG ROUTE SERVICE ACTIVE");
+  const {
+    FILTER_ENABLED,
+    QUICK_PICK_CATALOGS,
+    DYNAMIC_CATALOGS,
+    staticIds,
+    CATALOG_DEFS,
+    buildManifestCatalogs,
+    handleCatalogService,
+    catalogDeps,
+    loadConfigs,
+    MDBLIST_KEY
+  } = deps;
+
+app.use((req, res, next) => {
+  const url = req.url;
+  if (url.includes("/manifest.json") && !url.startsWith("/c/")) {
+    const fullManifest = {
+      id: FILTER_ENABLED ?"org.kris.ultra.max.v5" :"org.kris.ultra.max.all.v5",
+      version:"7.0.0-beta",
+  logo: "https://max-streams.gleeze.com/logo.svg",
+      name: FILTER_ENABLED ?"Ultra MAX" :"Ultra MAX All",
+      description: FILTER_ENABLED ?"Curated discovery with filtered rows and cleaner collections." :"Full Ultra MAX discovery with all available rows.",
+      types: ["movie","series"],
+      resources: ["catalog","meta","stream"],
+      catalogs: [
+        ...QUICK_PICK_CATALOGS,
+        ...buildManifestCatalogs(
+  staticIds,
+  CATALOG_DEFS
+),
+        ...DYNAMIC_CATALOGS.map(c => ({ type: c.type, id: c.id, name: c.name, extra: [{ name:"tmdbId", isRequired: true }] })),
+        { type:"movie", id:"search_movies", name:"Ultra MAX Search", extra:[{ name:"search", isRequired:true }], extraSupported:["search"] },
+        { type:"series", id:"search_series", name:"Ultra MAX Search", extra:[{ name:"search", isRequired:true }], extraSupported:["search"] }
+      ]
+    };
+    fullManifest.catalogs = (fullManifest.catalogs || [])
+  .filter(c => c && c.id) // keep valid ones only
+  .map(c => ({
+    ...c,
+    name: (c.name || "").trim()
+  }));
+
+    return res.json(fullManifest);
+  }
+  if (url.match(/\/catalog\//) && !url.startsWith("/c/")) {
+    const match = url.match(/\/catalog\/([^/]+)\/([^/]+)(?:\/(.+))?\.json/);
+    if (match) {
+      const [, type, id, extraStr] = match;
+      let extra = {};
+      if (extraStr) { try { extra = JSON.parse(decodeURIComponent(extraStr)); } catch { decodeURIComponent(extraStr).split("&").forEach(p => { const [k,v] = p.split("="); if(k && v) extra[k]=decodeURIComponent(v); }); } }
+        handleCatalogService(
+  id,
+  type,
+  extra,
+  null,
+  FILTER_ENABLED,
+  "en-US",
+  null,
+  null,
+  null,
+  false,
+  null,
+  [],
+  null,
+  null,
+  null,
+  catalogDeps
+)
+        .then(result => { res.setHeader("Cache-Control","public, max-age=300"); res.json(result); })
+        .catch(() => res.json({ metas: [] }));
+      return;
+    }
+  }
+if (url.includes("/catalog/") && url.includes("/c/")) {
+    const match = url.match(/\/c\/([^/]+)\/catalog\/([^/]+)\/([^/]+)(?:\/(.+))?\.json/);
+    if (match) {
+      let [, token, type, id, extraStr] = match;
+console.log(
+  "CUSTOM CATALOG:",
+  token,
+  id,
+  "extraStr:",
+  extraStr,
+  "query:",
+  req.query
+);
+
+      if (id === "search_movie") id = "search_movies";
+      const configs = loadConfigs();
+      const config = configs[token];
+      if (!config) return res.json({ metas: [] });
+      let extra = {};
+      if (extraStr) { try { extra = JSON.parse(decodeURIComponent(extraStr)); } catch { decodeURIComponent(extraStr).split('&').forEach(p => { const [k,v] = p.split('='); if(k && v) extra[k]=decodeURIComponent(v); }); } }
+      if (req.query.skip) extra.skip = parseInt(req.query.skip);
+      if (req.query.search) extra.search = req.query.search;
+      const hasAnime = config.catalogs.some(c => c.includes("anime") || c.includes("bollywood") || c.includes("crunchyroll") || c.includes("hidive"));
+       handleCatalogService(
+        id,
+        type,
+        extra,
+        config.mdblistKey || MDBLIST_KEY,
+        !hasAnime,
+        config.language || "en-US",
+        config.rpdbKey || null,
+        config.tpKey || null,
+        config.traktUser || null,
+        config.excludeUnreleased || false,
+        config.maxRating || null,
+        config.customCatalogs || [],
+        config.googleAiKey || null,
+        config.fanartKey || null,
+        config.omdbKey || null,
+        catalogDeps
+      )
+        .then(result => { res.setHeader("Cache-Control","public, max-age=300"); res.json(result); })
+        .catch(() => res.json({ metas: [] }));
+      return;
+    }
+  }
+  next();
+});
+
+}
+
+module.exports = {
+  registerCatalogRoutes
+};
