@@ -13,7 +13,7 @@ Build your own streaming universe with trending titles, fresh releases, streamin
 
 Choose exactly what appears on your home screen, in the order you want.
 
-👉 **https://max-streams.gleeze.com**
+👉 https://ultramax.vip
 
 1. Get a free MDBList API key  
    https://mdblist.com/api
@@ -77,11 +77,3 @@ English, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Turkish
 
 ---
 
-## 🖥 Self Hosting
-
-```bash
-git clone https://github.com/PaRaN01a-hash/stremio-catalog-addon
-cd stremio-catalog-addon
-cp .env.example .env
-# Add keys
-docker compose up -d
