@@ -22,6 +22,14 @@ function streamUrlFromManifest(manifestUrl, type, id) {
   return manifestUrl.replace(/\/manifest\.json(?:\?.*)?$/i, `/stream/${type}/${id}.json`);
 }
 
+// Stream addon manifest URLs embed the user's config (often including
+// debrid provider API keys) as a base64 path segment — strip it before logging.
+function redactUrlForLog(url) {
+  return String(url).replace(/[^/]{20,}/g, segment =>
+    /^[A-Za-z0-9+/_=-]+$/.test(segment) ? "[redacted]" : segment
+  );
+}
+
 async function fetchStreamAddonName(manifestUrl) {
   try {
     const m = await fetchCached(manifestUrl);
@@ -42,9 +50,9 @@ async function fetchStreamsFromAddon(manifestUrl, type, id) {
   const timer = setTimeout(() => controller.abort(), STREAM_BRIDGE_TIMEOUT_MS);
 
   try {
-    console.log("STREAM BRIDGE CALL", url);
+    console.log("STREAM BRIDGE CALL", redactUrlForLog(url));
     const resp = await fetch(url, { signal: controller.signal });
-    console.log("STREAM BRIDGE STATUS", resp.status, url);
+    console.log("STREAM BRIDGE STATUS", resp.status, redactUrlForLog(url));
     if (!resp.ok) return [];
 
     const data = await resp.json();
@@ -54,7 +62,7 @@ async function fetchStreamsFromAddon(manifestUrl, type, id) {
       ...stream
     }));
   } catch (e) {
-    console.log("STREAM BRIDGE ERROR", e.message, url);
+    console.log("STREAM BRIDGE ERROR", e.message, redactUrlForLog(url));
     return [];
   } finally {
     clearTimeout(timer);
