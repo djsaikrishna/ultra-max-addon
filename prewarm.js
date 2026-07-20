@@ -17,7 +17,7 @@ const PREWARM_CATALOGS = [
   'trakt_popular_movies', 'trakt_popular_series'
 ];
 
-const BASE_URL = 'https://ultramax.vip';
+const BASE_URL = 'http://localhost:7000';
 const INTERVAL_MS = 4 * 60 * 1000;
 
 async function prewarm() {
