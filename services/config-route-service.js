@@ -111,7 +111,7 @@ function registerConfigRoutes(app, deps) {
       });
     }
 
-    configs[token].catalogs = catalogs;
+    configs[token].catalogs = catalogs !== undefined ? catalogs : (configs[token].catalogs || []);
     configs[token].language = language || configs[token].language || "en-US";
     configs[token].rpdbKey = rpdbKey || configs[token].rpdbKey || null;
     configs[token].tpKey = tpKey || configs[token].tpKey || null;
