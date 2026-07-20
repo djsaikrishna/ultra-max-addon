@@ -127,5 +127,6 @@ async function handleTraktCatalog(
 }
 
 module.exports = {
-  handleTraktCatalog
+  handleTraktCatalog,
+  getValidTraktToken
 };
